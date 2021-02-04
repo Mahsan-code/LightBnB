@@ -99,11 +99,46 @@ exports.getAllReservations = getAllReservations;
  */
 const getAllProperties = function(options, limit = 10) {
  
-  const values = [limit]
-  const query = `SELECT * FROM properties LIMIT $1`
+  const values = [];
+  let query = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `;
+  
+  if (options.city) {
+    values.push(`%${options.city}%`);
+    query += `WHERE city LIKE $${values.length} `;
+  }
+
+  if (options.owner_id) {
+    values.push(`%${options.owner_id}%`);
+    query += ` AND owner_id = $${values.length}`;
+  }
+
+  if (options.minimum_price_per_night || options.maximum_price_per_night) {
+    values.push(parseInt(`${options.minimum_price_per_night * 100}`));
+    const minParam = values.length;
+    values.push(parseInt(`${options.maximum_price_per_night * 100}`));
+    const maxParam = values.length;
+    query += ` AND cost_per_night BETWEEN $${minParam} AND $${maxParam}`;
+  }
+
+  if (options.minimum_rating) {
+    values.push(Number(options.minimum_rating));
+    query += ` AND rating >= $${values.length}`;
+  }
+  
+  values.push(limit);
+  query += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${values.length};
+  `;
+  //console.log(query, values);
   return pool.query(query, values)
-  .then(res=>res.rows)
-  .catch(err=> console.error('query error', err.stack));
+    .then(res => res.rows)
+    .catch(err => console.error('query error', err.stack));
 }
 exports.getAllProperties = getAllProperties;
 
